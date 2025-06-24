@@ -7,50 +7,49 @@ import random
 df = pd.read_csv("hurdle_data_for_streamlit.csv")
 
 # タイトル
-st.title("110mハードル練習メニュー提案システム")
+st.title("110mハードル練習メニュー（1週間）自動提案")
 
-# 入力フォーム
-age = st.number_input("あなたの年齢を入力してください", min_value=10, max_value=100, value=15)
-experience = st.number_input("競技歴（年数）を入力してください", min_value=0, max_value=20, value=2)
-goal_input = st.text_input("上達したいことを入力してください（例：スピード強化、フォーム改善 など）")
+# 質問入力
+goal_input = st.text_input("どんな課題を改善したいですか？（例：スタートが遅い、体幹が弱い など）")
 
-if st.button("メニューを提案！") and goal_input:
-    # 形態素解析
+if st.button("1週間分のメニューを作成！") and goal_input:
+    # 形態素解析によるキーワード抽出
     tokenizer = Tokenizer()
     tokens = tokenizer.tokenize(goal_input, wakati=False)
     keywords = [token.surface for token in tokens if "名詞" in token.part_of_speech]
 
-    # 経験年数による割合決定（仮の分類）
-    if experience <= 2:
-        ratio = {'ウォーミングアップ・モビリティ向上': 0.3, '基礎技術（リズム・動作の習得）': 0.3, '専門技術（ハードル練習）': 0.4}
-    elif 3 <= experience <= 5:
-        ratio = {'専門技術（ハードル練習）': 0.4, 'スプリント強化': 0.3, '筋力強化': 0.3}
-    else:
-        ratio = {'スプリント強化': 0.4, '筋力強化': 0.3, '専門技術（ハードル練習）': 0.3}
-
-    # キーワードによるフィルタリング
+    # キーワードによるカテゴリフィルタ
     filtered_df = pd.DataFrame()
     for kw in keywords:
         filtered_df = pd.concat([filtered_df, df[df["得られる効果"].str.contains(kw, na=False)]])
     filtered_df = filtered_df.drop_duplicates()
-    filtered_df = filtered_df[filtered_df["適切な年齢"] <= age]
 
-    # 種類ごとに抽出
-    final_output = pd.DataFrame()
-    for t_type, r in ratio.items():
-        subset = filtered_df[filtered_df["種類"] == t_type]
-        n_samples = max(1, int(len(filtered_df) * r))
-        final_output = pd.concat([final_output, subset.sample(n=min(n_samples, len(subset)), random_state=42)])
+    # データがないときの対処
+    if filtered_df.empty:
+        st.warning("該当するキーワードのメニューが見つかりませんでした。入力内容を変えてみてください。")
+    else:
+        # 強度のバランスを取って7日間メニューを構成（高:中:低 = 2:3:2）
+        days = ["月", "火", "水", "木", "金", "土", "日"]
+        weekly_plan = pd.DataFrame()
 
-    # 出力
-    if not final_output.empty:
-        st.subheader(f"🎯 競技歴{experience}年のあなたにおすすめのハードル練習メニュー")
-        for _, row in final_output.iterrows():
-            st.markdown(f"### ● メニュー名：{row['メニュー名']}")
+        # 強度レベル分け
+        high = filtered_df[filtered_df["強度"] >= 4]
+        mid = filtered_df[(filtered_df["強度"] == 3)]
+        low = filtered_df[filtered_df["強度"] <= 2]
+
+        schedule = []
+        schedule += random.sample(list(high.index), min(2, len(high)))
+        schedule += random.sample(list(mid.index), min(3, len(mid)))
+        schedule += random.sample(list(low.index), min(2, len(low)))
+        selected = filtered_df.loc[schedule].sample(n=min(7, len(schedule)), random_state=42)
+
+        # 表示
+        st.subheader("🗓 あなたにおすすめの1週間分の練習メニュー")
+
+        for i, (_, row) in enumerate(selected.iterrows()):
+            st.markdown(f"### {days[i]}曜日：{row['メニュー名']}")
             st.write(f"・説明：{row['メニューの説明']}")
             st.write(f"・効果：{row['得られる効果']}")
             st.write(f"・形式：{row['種類']}")
-            st.write(f"・推奨年齢：{row['適切な年齢']}歳以上")
+            st.write(f"・強度：{row['強度']}")
             st.markdown("---")
-    else:
-        st.warning("該当するメニューが見つかりませんでした。入力内容を見直してください。")
