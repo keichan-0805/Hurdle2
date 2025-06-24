@@ -4,7 +4,7 @@ from janome.tokenizer import Tokenizer
 import random
 
 # ハードル練習メニューCSV読み込み
-df = pd.read_csv("hurdle_data_for_streamlit.csv")
+df = pd.read_csv("hurdle_data_expanded.csv")
 
 # タイトル
 st.title("110mハードル練習メニュー（1週間）自動提案")
